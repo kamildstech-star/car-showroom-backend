@@ -56,8 +56,11 @@ class SitemapController extends Controller
                         $entry = [
                             'slug' => $car->slug,
                             'status' => $car->status,
-                            'lastmod' => $lastmod,
                         ];
+
+                        if ($lastmod !== null) {
+                            $entry['lastmod'] = $lastmod;
+                        }
 
                         if (!$first) {
                             fwrite($handle, ",\n");

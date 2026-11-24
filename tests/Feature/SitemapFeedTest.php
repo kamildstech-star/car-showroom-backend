@@ -140,6 +140,119 @@ class SitemapFeedTest extends TestCase
         $data = json_decode($response->streamedContent(), true);
         $this->assertIsArray($data);
         $this->assertCount(1, $data);
-        $this->assertNull($data[0]['lastmod'], 'When both updated_at and published_at are null, lastmod must be null');
+        $this->assertArrayNotHasKey('lastmod', $data[0], 'When both updated_at and published_at are null, lastmod key must be omitted');
+    }
+
+    public function test_sitemap_feed_excludes_sold_car_with_null_engine_capacity(): void
+    {
+        $brand = Brand::factory()->create();
+
+        $soldCar = Car::factory()->sold()->create([
+            'brand_id' => $brand->id,
+            'publication_status' => 'published',
+            'price' => 5000000,
+            'mileage' => 45000,
+            'engine_capacity' => null,
+            'exterior_color' => 'White',
+        ]);
+
+        CarImage::factory()->create([
+            'car_id' => $soldCar->id,
+            'image_path' => 'cars/sample.webp',
+        ]);
+
+        $response = $this->get('/api/v1/sitemap/cars');
+        $response->assertOk();
+
+        $data = json_decode($response->streamedContent(), true);
+        $this->assertCount(0, $data, 'Sold cars with null engine capacity must be excluded from sitemap');
+    }
+
+    public function test_sitemap_feed_excludes_sold_car_with_null_exterior_color(): void
+    {
+        $brand = Brand::factory()->create();
+
+        $soldCar = Car::factory()->sold()->create([
+            'brand_id' => $brand->id,
+            'publication_status' => 'published',
+            'price' => 5000000,
+            'mileage' => 45000,
+            'engine_capacity' => 1800,
+            'exterior_color' => null,
+        ]);
+
+        CarImage::factory()->create([
+            'car_id' => $soldCar->id,
+            'image_path' => 'cars/sample.webp',
+        ]);
+
+        $response = $this->get('/api/v1/sitemap/cars');
+        $response->assertOk();
+
+        $data = json_decode($response->streamedContent(), true);
+        $this->assertCount(0, $data, 'Sold cars with null exterior color must be excluded from sitemap');
+    }
+
+    public function test_sitemap_feed_excludes_sold_car_with_zero_price(): void
+    {
+        $brand = Brand::factory()->create();
+
+        $soldCar = Car::factory()->sold()->create([
+            'brand_id' => $brand->id,
+            'publication_status' => 'published',
+            'price' => 0,
+            'mileage' => 45000,
+            'engine_capacity' => 1800,
+            'exterior_color' => 'White',
+        ]);
+
+        CarImage::factory()->create([
+            'car_id' => $soldCar->id,
+            'image_path' => 'cars/sample.webp',
+        ]);
+
+        $response = $this->get('/api/v1/sitemap/cars');
+        $response->assertOk();
+
+        $data = json_decode($response->streamedContent(), true);
+        $this->assertCount(0, $data, 'Sold cars with zero price must be excluded from sitemap');
+    }
+
+    public function test_sitemap_feed_excludes_soft_deleted_cars(): void
+    {
+        $brand = Brand::factory()->create();
+
+        $car = Car::factory()->create([
+            'brand_id' => $brand->id,
+            'status' => 'available',
+            'publication_status' => 'published',
+        ]);
+
+        $car->delete();
+
+        $response = $this->get('/api/v1/sitemap/cars');
+        $response->assertOk();
+
+        $data = json_decode($response->streamedContent(), true);
+        $this->assertCount(0, $data, 'Soft-deleted cars must be excluded from sitemap');
+    }
+
+    public function test_sitemap_feed_streams_more_than_100_cars_completely(): void
+    {
+        $brand = Brand::factory()->create();
+
+        // Create 105 published available cars
+        Car::factory()->count(105)->create([
+            'brand_id' => $brand->id,
+            'status' => 'available',
+            'publication_status' => 'published',
+        ]);
+
+        $response = $this->get('/api/v1/sitemap/cars');
+        $response->assertOk();
+
+        $data = json_decode($response->streamedContent(), true);
+        $this->assertIsArray($data);
+        $this->assertCount(105, $data, 'Chunked sitemap feed must stream all 105 published cars completely');
     }
 }
